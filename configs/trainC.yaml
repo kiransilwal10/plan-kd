@@ -1,0 +1,22 @@
+seed: 42
+data_cfg: configs/data.yaml
+model_cfg: configs/model.yaml
+output_root: outputs
+stage: grpo_unknown
+trainer:
+  epochs: 1
+  batch_size: 4
+  grad_accum: 4
+  num_workers: 2
+  log_interval: 10
+  save_every: 1000
+  device: cuda
+grpo:
+  group_size: 4
+  lr: 1.0e-5
+  clip_eps: 0.2
+  kl_weight: 0.01
+  reward:
+    answer_weight: 0.5
+    evidence_weight: 0.3
+    abstain_weight: 0.2

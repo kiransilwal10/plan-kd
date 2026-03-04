@@ -1,0 +1,21 @@
+seed: 42
+data_root: data
+datasets:
+  raster:
+    name: waffle
+    path: data/waffle
+    image_size: 512
+    extensions: [".jpg", ".png"]
+  vector:
+    name: floorplancad
+    path: data/floorplancad
+    svg_ext: ".svg"
+    json_ext: ".json"
+splits:
+  train: data/labels/train.filtered.jsonl
+  val: data/labels/val.filtered.jsonl
+  test: data/labels/test.filtered.jsonl
+meta:
+  normalize: true
+  rotation_aug: [0, 90, 180, 270]
+  cache_dir: outputs/cache

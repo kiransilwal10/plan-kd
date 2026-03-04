@@ -1,0 +1,24 @@
+# API keys / secrets
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+
+# Outputs / checkpoints
+outputs/
+*.pt
+
+# IDE
+.vscode/
+.idea/
+
+# Data (large files — professor can download separately)
+data/cubicasa5k.zip
+data/waffle/
+data/floorplancad/

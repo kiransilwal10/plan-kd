@@ -1,0 +1,90 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Distilling a Floor-Plan Vision-Language Model into a Tiny VLM}
+\author{Project Notes}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We describe a reproducible pipeline to distill a large vision-language teacher into a compact student model for evidence-grounded floor-plan question answering. The method ingests raster floor plans, prompts a vision-capable teacher to produce answers and evidence, applies a critic filter, and trains a student in three stages: answer distillation, evidence distillation, and preference optimization for abstention. Evaluation covers answer accuracy, evidence quality, abstention behavior, robustness, and efficiency.
+\end{abstract}
+
+\section{Introduction}
+Given floor-plan imagery, we seek a small VLM that can answer questions, point to supporting evidence (door/room IDs or masks), and abstain when uncertain. We leverage a stronger teacher (e.g., GPT-4o) to generate weak labels and distill knowledge into a lighter student (CLIP vision + small text decoder).
+
+\section{Data}
+\textbf{Input}: raster floor plans (e.g., CubiCasa5k). Each sample includes image $\mathbf{x}$, metadata (paths, rotation), and optional geometric annotations (rooms, doors).\\
+\textbf{Labels}: JSONL with fields $(q, a, \mathcal{E}, u)$ where $q$ is question, $a$ is answer token/string, $\mathcal{E}$ contains evidence pointers (door/room IDs, optional mask), $u$ is uncertainty. We collect $k=3$ diverse questions per image from a large bank.
+
+\section{Teacher Labeling}
+\textbf{Prompt}: cautious reviewer; answer only if visible, otherwise \texttt{unknown}; return answer + evidence IDs + rationale.\\
+\textbf{Generation}: For each image, sample $k$ questions, send low-res JPEG plus question to a vision-capable teacher (default GPT-4o-mini).\\
+\textbf{Filtering}: Critic discards entries with missing evidence (when required), contradictory tool traces, empty/none answers, or ``unseen'' rationales.\\
+\textbf{Traceability}: Each record stores \texttt{image\_id}, \texttt{image\_path}, \texttt{question\_key}, and \texttt{qid}.
+
+\section{Student Architecture}
+We fuse a pretrained vision tower with a small text decoder.\\
+\textbf{Vision}: CLIP ViT (e.g., \texttt{openai/clip-vit-base-patch32}), often frozen.\\
+\textbf{Text}: Small LM (e.g., \texttt{gpt2}, or Phi-2/TinyLlama variants), optionally LoRA-tuned.\\
+\textbf{Connector}: Concatenate pooled vision embedding $\mathbf{v} \in \mathbb{R}^{d_v}$ and pooled text embedding $\mathbf{t} \in \mathbb{R}^{d_t}$, then
+\[
+\mathbf{h} = \phi(W[\mathbf{v};\mathbf{t}] + b), \quad \phi=\text{GELU},
+\]
+followed by heads for answer logits, evidence pointer logits, and an abstain logit. Evidence head outputs a fixed-dim pointer vector.
+
+\section{Training Objectives}
+Let $z_s$ be student answer logits, $z_t$ teacher logits, $y$ target token, $T$ temperature. Let $p_s, p_t$ be student/teacher evidence pointers, and $\beta$ the DPO temperature.
+\subsection{Stage A: Answer KD}
+\[
+L_A = \lambda_{\text{ce}}\cdot \text{CE}(z_s, y) + \lambda_{\text{kd}}\cdot T^2 \cdot \text{KL}\big(\text{softmax}(z_t/T) \,\|\, \text{softmax}(z_s/T)\big).
+\]
+\subsection{Stage B: Evidence KD}
+\[
+L_B = L_A + \lambda_{\text{ev}}\cdot \|p_s - p_t\|_2^2.
+\]
+\subsection{Stage C: Abstention via DPO}
+With preference log-probs $\pi$ (student) and $\rho$ (reference), positive = abstain-when-uncertain, negative = answer-when-uncertain,
+\[
+L_C = -\log \sigma\big(\beta\big[(\pi_{\text{pos}} - \pi_{\text{neg}}) - (\rho_{\text{pos}} - \rho_{\text{neg}})\big]\big).
+\]
+
+\section{Training Regimen}
+\textbf{Stage A} (Answer KD): train on filtered labels for answer logits + KD.\\
+\textbf{Stage B} (Evidence KD): initialize from Stage A; add evidence pointer loss.\\
+\textbf{Stage C} (DPO): initialize from Stage B; optimize abstention behavior.\\
+\textbf{Hyperparameters}: image size 224; max length 128; freeze vision; small LR for text ($\sim$2e-5) and projector ($\sim$1e-4); cosine schedule; gradient accumulation as needed.
+
+\section{Evaluation}
+\textbf{QA}: exact/lenient accuracy.\\
+\textbf{Evidence}: F1/IoU on pointers/masks.\\
+\textbf{Abstention}: precision/recall/AUPRC on \texttt{unknown} decisions.\\
+\textbf{Graph}: adjacency edit distance (if room graphs available).\\
+\textbf{Efficiency}: params, VRAM (bs=1), latency.\\
+\textbf{Robustness}: rotation, scale, JPEG noise, crops.\\
+\textbf{Cross-dataset}: train on CAD, test on raster, and vice versa.
+
+\section{Design Choices}
+\begin{itemize}
+    \item Pretrained vision/text for strong priors and rapid convergence.
+    \item Three-stage KD for stable learning and explicit evidence supervision.
+    \item Multiple questions per image to maximize label efficiency.
+    \item Traceability fields to audit per-image/per-question outputs.
+    \item Abstention-first safety: prefer \texttt{unknown} when evidence is insufficient.
+\end{itemize}
+
+\section{Future Work}
+\begin{itemize}
+    \item Swap text to Phi-2/TinyLlama with QLoRA; unfreeze top vision blocks or add adapters.
+    \item Integrate CAD tokens and geometry tools directly into the model input or retrieval.
+    \item Heatmap-based evidence supervision instead of pointer-only.
+    \item Richer preference pairs for DPO from tool traces and rationales.
+\end{itemize}
+
+\end{document}

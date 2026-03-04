@@ -1,0 +1,1 @@
+{"qid": "sample-0", "question": "Is there a corridor between room A and room B?", "answer": "unknown", "evidence": {"door_ids": [], "room_ids": ["room-0"], "mask": null}, "notes": "Placeholder label", "must_ground": true, "uncertainty": 1.0, "tool_traces": {"path_len": null, "width_ok": null}}

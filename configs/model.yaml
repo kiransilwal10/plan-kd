@@ -1,0 +1,17 @@
+model:
+  name: pretrained_vlm
+  vision_model: openai/clip-vit-base-patch32
+  text_model: gpt2
+  projector_hidden: 512
+  evidence_dim: 32
+  max_length: 128
+  image_size: 224
+  freeze_vision: true
+  freeze_text: false
+optim:
+  lr_text: 2.0e-5
+  lr_vision: 2.0e-5
+  lr_adapters: 1.0e-4
+  weight_decay: 0.01
+  scheduler: cosine
+  warmup_steps: 500
